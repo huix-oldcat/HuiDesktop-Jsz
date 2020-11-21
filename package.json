@@ -24,6 +24,6 @@
   },
   "scripts": {
     "build": "npx webpack --mode=production",
-    "build-dev": "set BUILD_LEVEL=development && npx webpack --mode=development"
+    "build-dev": "set BUILD_LEVEL=development&& npx webpack --mode=development"
   }
 }
