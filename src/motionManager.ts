@@ -6,12 +6,10 @@ import 'pixi-spine'
 import { Tween } from '@tweenjs/tween.js'
 
 export enum motion {
-  idle,
-  walking,
-  dancing,
-  flying,
-  dragging,
-  touching
+  stand,
+  up,
+  down,
+  walk
 }
 
 /**
@@ -29,7 +27,7 @@ export default class MotionManager {
     this._animation = animation
     this._userSettings = userSettings
     this._shapeManager = shapeManager
-    this._currentMotion = motion.idle
+    this._currentMotion = motion.stand
 
     // set mix
     this._animation.stateData.defaultMix = 0.32
@@ -41,7 +39,8 @@ export default class MotionManager {
     this.enableRandomWalk()
 
     // set the animation
-    this._animation.state.addListener({ complete: this.onAnimationComplete })
+    this._animation.skeleton.setSkin(this._animation.spineData.skins[0])
+    this._animation.state.addListener({ complete: (trackEntry: PIXI.spine.core.TrackEntry) => this.onAnimationComplete(trackEntry) })
     this._animation.interactive = true
     this._animation.on('mousedown', () => this.leftClick())
     this._animation.on('rightdown', () => this.rightClick())
@@ -51,8 +50,6 @@ export default class MotionManager {
     // these functions will be called when the window is begin dragging
     // in this application we don't care which mouse button is used
     const window_ = window as ExtendedWindow
-    window_.huiDesktop_DragMove_OnMouseRightDown = () => this.dragDown()
-    window_.huiDesktop_DragMove_OnMouseLeftDown = () => this.dragDown()
     window_.huiDesktop_DragMove_OnMouseLeftUp = () => this.dragUp()
     window_.huiDesktop_DragMove_OnMouseRightUp = () => this.dragUp()
   }
@@ -60,7 +57,7 @@ export default class MotionManager {
   private enableRandomWalk (): void {
     if (this._userSettings.walkRandom > 0) {
       setInterval(() => {
-        if (this._currentMotion !== motion.idle) return
+        if (this._currentMotion !== motion.stand) return
         const rand = Math.random() * this._userSettings.walkRandom
         if (rand < 1) this.startWalking()
       }, 1000)
@@ -68,39 +65,34 @@ export default class MotionManager {
   }
 
   private leftClick (): void {
-    if (this._currentMotion === motion.flying || this._currentMotion === motion.dragging) return
+    if (this._currentMotion === motion.up) return
     switch (this._userSettings.left) {
       case MouseKeyFunction.touch:
         this.touch()
         break
-      case MouseKeyFunction.switchDance:
-        this.switchDance()
-        break
       case MouseKeyFunction.walk:
-        this._currentMotion === motion.walking ? this.startWalking() : this.resetToIdel()
+        this._currentMotion !== motion.walk ? this.startWalking() : this.resetToIdel()
         break
     }
   }
 
   private rightClick (): void {
-    if (this._currentMotion === motion.flying || this._currentMotion === motion.dragging) return
+    if (this._currentMotion === motion.up) return
     switch (this._userSettings.right) {
       case MouseKeyFunction.touch:
         this.touch()
         break
-      case MouseKeyFunction.switchDance:
-        this.switchDance()
-        break
       case MouseKeyFunction.walk:
-        this._currentMotion === motion.walking ? this.startWalking() : this.resetToIdel()
+        this._currentMotion !== motion.walk ? this.startWalking() : this.resetToIdel()
         break
     }
   }
 
   public onAnimationComplete (trackEntry: PIXI.spine.core.TrackEntry): void {
     switch (trackEntry.animation.name) {
-      case 'touch':
-        if (this.currentMotion === motion.touching) {
+      case 'up':
+      case 'down':
+        if (this.currentMotion === motion.up || this.currentMotion === motion.down) {
           this.resetToIdel()
         }
         break
@@ -112,13 +104,8 @@ export default class MotionManager {
   }
 
   public resetToIdel (): void {
-    if (this._dancing) {
-      this._currentMotion = motion.dancing
-      this._animation.state.setAnimation(0, 'dance', true)
-    } else {
-      this._currentMotion = motion.idle
-      this._animation.state.setAnimation(0, 'stand2', true)
-    }
+    this._currentMotion = motion.stand
+    this._animation.state.setAnimation(0, 'stand', true)
   }
 
   public switchDance (): void {
@@ -127,34 +114,18 @@ export default class MotionManager {
   }
 
   public touch (): void {
-    if (this._currentMotion === motion.idle) {
-      this._currentMotion = motion.touching
-      this._animation.state.setAnimation(0, 'touch', false)
+    if (this._currentMotion === motion.stand) {
+      this._currentMotion = motion.up
+      this._animation.state.setAnimation(0, 'up', false)
     }
-  }
-
-  private dragDown (): void {
-    // if not idle, stop the vice animation
-    this._tween?.stop()
-    this._currentMotion = motion.dragging
-    this._animation.state.setAnimation(0, 'tuozhuai2', true)
   }
 
   private dragUp (): void {
-    if (this._userSettings.free) {
-      // don't need to fly
-      this.resetToIdel()
-      this._userSettings.save(true)
-      return
+    if (!this._userSettings.free) {
+      huiDesktop.Window.Top = this._shapeManager.groundLocation
     }
-
-    const target = this._shapeManager.groundLocation
-
-    this._tween = new Tween(huiDesktop.Window)
-    this._tween.to({ Top: target }, 0.666 * Math.abs(target - huiDesktop.Window.Top)) // speed = 0.666ms * pixels
-    this._tween.onStart(_ => { this._currentMotion = motion.flying })
-    this._tween.onComplete(_ => { this.resetToIdel(); this._userSettings.save(true) })
-    this._tween.start()
+    this.resetToIdel()
+    setTimeout(() => this._userSettings.save(true), 500) // not async api
   }
 
   private startWalking (): void {
@@ -170,7 +141,7 @@ export default class MotionManager {
 
     this._tween = new Tween(huiDesktop.Window)
     this._tween.to({ Left: huiDesktop.Window.Left + walkDistance * (this._shapeManager.flip ? -1 : 1) }, walkTime)
-    this._tween.onStart(_ => { this._currentMotion = motion.walking; this._animation.state.setAnimation(0, 'walk', true) })
+    this._tween.onStart(_ => { this._currentMotion = motion.walk; this._animation.state.setAnimation(0, 'walk', true) })
     this._tween.onComplete(_ => { this.resetToIdel(); this._userSettings.save(true) })
     this._tween.start()
   }

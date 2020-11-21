@@ -4,7 +4,6 @@ import ShapeManager from './shapeManager'
 export enum MouseKeyFunction {
   void,
   touch,
-  switchDance,
   walk
 }
 
