@@ -1,4 +1,4 @@
-import HuiDesktopAzureLaneApplication from "./app"
+import HuiDesktopAzureLaneApplication from './app'
 
 HuiDesktopAzureLaneApplication.CreateSingleCharacterApp(window.location.hash.substr(1))
-  .then(app => app.run())
+  .then(app => app.run()).catch(e => console.error(e))
